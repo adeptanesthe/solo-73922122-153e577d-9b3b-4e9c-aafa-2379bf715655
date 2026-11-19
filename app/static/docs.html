@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>帮助文档目录 - 帮助中心搜索盲测</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="/">帮助中心搜索盲测</a>
+      <nav>
+        <a href="/">开始盲测</a>
+        <a href="/docs">帮助文档</a>
+        <a href="/summary">汇总看板</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="card">
+      <h1>帮助文档目录</h1>
+      <p class="sub">内置的帮助文档，点击标题即可阅读全文。</p>
+      <ul class="doc-list" id="list">
+        <li class="muted">加载中…</li>
+      </ul>
+    </section>
+  </main>
+
+  <script src="/static/common.js"></script>
+  <script>
+    fetch('/api/docs')
+      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(docs => {
+        const list = document.getElementById('list');
+        list.replaceChildren();
+        docs.forEach(d => {
+          const li = document.createElement('li');
+          li.className = 'doc-item';
+          li.innerHTML =
+            `<div class="pos">${d.id}</div>` +
+            `<div class="doc-main">` +
+            `<a class="doc-title" href="/docs/${d.id}">${escapeHtml(d.title)}</a>` +
+            `<div class="doc-snippet">${escapeHtml(d.body.slice(0, 70))}…</div>` +
+            `</div>`;
+          list.appendChild(li);
+        });
+      })
+      .catch(err => {
+        document.getElementById('list').innerHTML =
+          '<li class="muted">加载失败：' + escapeHtml(err.message) + '</li>';
+      });
+  </script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+services:
+  blind-search:
+    build: .
+    image: help-center-blind-search:demo
+    container_name: help-center-blind-search
+    ports:
+      - "8000:8000"
+    volumes:
+      - blind_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/docs')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  blind_data:

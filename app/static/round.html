@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>盲测轮次 - 帮助中心搜索盲测</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="/">帮助中心搜索盲测</a>
+      <nav>
+        <a href="/">开始盲测</a>
+        <a href="/docs">帮助文档</a>
+        <a href="/summary">汇总看板</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="card">
+      <h1 id="title">加载中…</h1>
+      <p class="sub" id="meta"></p>
+
+      <h2>本轮计票</h2>
+      <div class="tally">
+        <div class="tally-box">
+          <div class="num" id="tally-full">-</div>
+          <div class="lbl">全文 BM25 得票</div>
+        </div>
+        <div class="tally-box">
+          <div class="num" id="tally-title">-</div>
+          <div class="lbl">标题加权 BM25 得票</div>
+        </div>
+      </div>
+
+      <div class="share-link">
+        本轮固定链接（重开可复原列表与计票）：<span id="share"></span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>盲测文档列表</h2>
+      <p class="sub">
+        列表不显示每篇文档的排序归属。点击标题即可阅读文档并完成投票；
+        同一篇文档重复或并发点击最多计一票。
+      </p>
+      <ul class="doc-list" id="doc-list"></ul>
+    </section>
+  </main>
+
+  <div class="toast" id="toast"></div>
+  <script src="/static/common.js"></script>
+  <script>
+    const roundId = getRoundId();
+    // 本地防抖：点击进行中先锁住该文档，服务端另有唯一约束兜底。
+    const inFlight = new Set();
+
+    async function load() {
+      let data;
+      try {
+        data = await api('/api/rounds/' + roundId);
+      } catch (err) {
+        document.getElementById('title').textContent = '加载失败';
+        document.getElementById('meta').textContent = err.message;
+        return;
+      }
+      window.__round = data;
+      document.getElementById('title').textContent = '搜索词：' + data.query;
+      document.getElementById('meta').textContent =
+        '创建时间 ' + data.created_at + ' ｜ 共 ' + data.items.length + ' 篇文档 ｜ 累计点击 ' + data.click_count + ' 次';
+      document.getElementById('share').textContent = location.origin + '/rounds/' + data.round_id;
+      render(data);
+    }
+
+    function render(data) {
+      document.getElementById('tally-full').textContent = data.tally.full ?? 0;
+      document.getElementById('tally-title').textContent = data.tally.title ?? 0;
+
+      const list = document.getElementById('doc-list');
+      list.replaceChildren();
+      data.items.forEach(item => {
+        const li = document.createElement('li');
+        li.className = 'doc-item';
+
+        const badges = [];
+        // 平手标记与已计票状态均来自服务端：平手标记仅在该文档被点开后返回。
+        if (item.tie) badges.push('<span class="badge tie">平手文档 · 不计票</span>');
+        if (item.voted) badges.push('<span class="badge voted">已计一票</span>');
+
+        li.innerHTML =
+          `<div class="pos">${item.position}</div>` +
+          `<div class="doc-main">` +
+          `<button class="doc-title" data-doc="${item.doc_id}">${escapeHtml(item.title)}</button>` +
+          `<div class="doc-snippet">${escapeHtml(item.snippet)}</div>` +
+          (badges.length ? `<div class="badges">${badges.join('')}</div>` : '') +
+          `</div>`;
+        list.appendChild(li);
+      });
+
+      list.querySelectorAll('.doc-title').forEach(btn => {
+        btn.addEventListener('click', () => onClick(parseInt(btn.dataset.doc, 10), btn));
+      });
+    }
+
+    async function onClick(docId, btn) {
+      if (inFlight.has(docId)) {
+        toast('请求处理中，请勿重复点击');
+        return;
+      }
+      inFlight.add(docId);
+      btn.disabled = true;
+      try {
+        const res = await api(`/api/rounds/${roundId}/click`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ doc_id: docId })
+        });
+        if (res.tie) {
+          toast('这是两边首选相同的平手文档，只展示一次，不计票');
+        } else if (res.vote_recorded_now) {
+          toast('投票成功，已计入对应排序（盲测中不显示归属）');
+        } else {
+          toast('该文档此前已被点开并计票，重复点击不再计票');
+        }
+        // 重新从服务端拉取权威状态（计票、平手揭示均由服务端决定）。
+        const fresh = await api('/api/rounds/' + roundId);
+        window.__round = fresh;
+        render(fresh);
+        // 新标签页打开完整帮助文档。
+        window.open('/docs/' + docId, '_blank', 'noopener');
+      } catch (err) {
+        toast('操作失败：' + err.message);
+        btn.disabled = false;
+      } finally {
+        inFlight.delete(docId);
+      }
+    }
+
+    load();
+  </script>
+</body>
+</html>

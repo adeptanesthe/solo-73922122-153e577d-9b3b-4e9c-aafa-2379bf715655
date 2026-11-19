@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>汇总看板 - 帮助中心搜索盲测</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="/">帮助中心搜索盲测</a>
+      <nav>
+        <a href="/">开始盲测</a>
+        <a href="/docs">帮助文档</a>
+        <a href="/summary">汇总看板</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="card">
+      <h1>两套排序得票汇总</h1>
+      <p class="sub">汇总所有盲测轮次中，两套 BM25 排序各自获得的票数。</p>
+      <div class="tally">
+        <div class="tally-box">
+          <div class="num" id="num-full">-</div>
+          <div class="lbl">全文 BM25 总得票</div>
+        </div>
+        <div class="tally-box">
+          <div class="num" id="num-title">-</div>
+          <div class="lbl">标题加权 BM25 总得票</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>分轮次明细</h2>
+      <div id="rounds" class="muted">加载中…</div>
+    </section>
+  </main>
+
+  <script src="/static/common.js"></script>
+  <script>
+    api('/api/summary').then(data => {
+      document.getElementById('num-full').textContent = data.votes_by_side.full ?? 0;
+      document.getElementById('num-title').textContent = data.votes_by_side.title ?? 0;
+
+      const box = document.getElementById('rounds');
+      if (!data.rounds.length) {
+        box.textContent = '还没有盲测轮次。';
+        return;
+      }
+      const table = document.createElement('table');
+      table.innerHTML =
+        '<thead><tr><th>搜索词</th><th>创建时间</th>' +
+        '<th>全文 BM25 票</th><th>标题加权 BM25 票</th><th>总票数</th>' +
+        '<th>点击次数</th><th></th></tr></thead>';
+      const tbody = document.createElement('tbody');
+      data.rounds.forEach(r => {
+        const tr = document.createElement('tr');
+        tr.innerHTML =
+          `<td>${escapeHtml(r.query)}</td>` +
+          `<td class="meta">${escapeHtml(r.created_at)}</td>` +
+          `<td>${r.full_votes ?? 0}</td>` +
+          `<td>${r.title_votes ?? 0}</td>` +
+          `<td>${r.total_votes ?? 0}</td>` +
+          `<td>${r.clicks}</td>` +
+          `<td><a href="/rounds/${r.round_id}">打开</a></td>`;
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      box.replaceChildren(table);
+    }).catch(err => {
+      document.getElementById('rounds').textContent = '加载失败：' + err.message;
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pylibs/
+.venv/
+venv/
+.ruff_cache/
+
+# SQLite 数据与 WAL 临时文件
+app/data/
+*.db
+*.db-wal
+*.db-shm
+
+# 系统/编辑器
+.DS_Store
+.idea/
+.vscode/

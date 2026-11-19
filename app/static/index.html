@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>帮助中心搜索盲测</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="/">帮助中心搜索盲测</a>
+      <nav>
+        <a href="/">开始盲测</a>
+        <a href="/docs">帮助文档</a>
+        <a href="/summary">汇总看板</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="card">
+      <h1>搜索盲测</h1>
+      <p class="sub">
+        同一次搜索会分别用「全文 BM25」和「标题加权 BM25」各排一张榜，
+        再按交错规则合并成一份隐藏归属的盲测列表。点开文档即完成一次投票。
+      </p>
+      <form class="search-form" id="search-form">
+        <input type="text" id="query" name="query"
+               placeholder="输入搜索词，例如：密码、退款、两步验证…"
+               autocomplete="off" required>
+        <button type="submit">开始盲测</button>
+      </form>
+      <div class="error" id="error" hidden></div>
+    </section>
+
+    <section class="card">
+      <h2>盲测规则</h2>
+      <ul class="rules">
+        <li>系统随机决定先手，之后两套排序轮流选择各自榜单中最靠前、且尚未展示的文档。</li>
+        <li>当两边的剩余首选是同一篇文档时，该文档只展示一次：<b>不计票、也不换手</b>。</li>
+        <li>列表不显示每篇文档由哪套排序选出（归属隐藏），避免投票偏向。</li>
+        <li>每轮中，一篇有归属文档的<b>首次点开</b>记给选出它的一方；并发或重复点击合计最多一票。</li>
+        <li>平手文档可以正常阅读，但不产生投票。</li>
+        <li>每轮都有固定链接，重新打开即可复原当时的文档列表与计票状态。</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>最近的盲测轮次</h2>
+      <div id="recent" class="muted">加载中…</div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast"></div>
+  <script src="/static/common.js"></script>
+  <script>
+    const form = document.getElementById('search-form');
+    const errorBox = document.getElementById('error');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorBox.hidden = true;
+      const query = document.getElementById('query').value.trim();
+      if (!query) return;
+      try {
+        const data = await api('/api/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query })
+        });
+        window.location.href = '/rounds/' + data.round_id;
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+      }
+    });
+
+    async function loadRecent() {
+      const box = document.getElementById('recent');
+      try {
+        const data = await api('/api/summary');
+        if (!data.rounds.length) {
+          box.textContent = '还没有盲测轮次，先在上方发起一次搜索吧。';
+          return;
+        }
+        const table = document.createElement('table');
+        table.innerHTML =
+          '<thead><tr><th>搜索词</th><th>创建时间</th><th>全文 BM25</th>' +
+          '<th>标题加权 BM25</th><th>点击次数</th><th>链接</th></tr></thead>';
+        const tbody = document.createElement('tbody');
+        data.rounds.forEach(r => {
+          const tr = document.createElement('tr');
+          tr.innerHTML =
+            `<td>${escapeHtml(r.query)}</td>` +
+            `<td class="meta">${escapeHtml(r.created_at)}</td>` +
+            `<td>${r.full_votes ?? 0}</td>` +
+            `<td>${r.title_votes ?? 0}</td>` +
+            `<td>${r.clicks}</td>` +
+            `<td><a href="/rounds/${r.round_id}">打开轮次</a></td>`;
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        box.replaceChildren(table);
+      } catch (err) {
+        box.textContent = '加载失败：' + err.message;
+      }
+    }
+    loadRecent();
+  </script>
+</body>
+</html>
